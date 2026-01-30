@@ -1,0 +1,19 @@
+{
+  "name": "blocket-scraper-bot",
+  "version": "1.0.0",
+  "description": "Blocket bil-scraper för marknadsanalys",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "scrape": "node src/index.js",
+    "test": "node src/test.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "node-cron": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
