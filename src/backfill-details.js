@@ -28,14 +28,14 @@ async function processAnnons(annons, stats, total) {
   try {
     const detaljer = await hamtaDetaljer(annons.url);
 
-    if (detaljer.vaxellada || detaljer.kaross || detaljer.farg || detaljer.stad) {
+    // OBS: stad hämtas nu från sök-API:et (annons.location), inte från sidan
+    if (detaljer.vaxellada || detaljer.kaross || detaljer.farg) {
       const { error: updateError } = await supabase
         .from("blocket_annonser")
         .update({
           vaxellada: detaljer.vaxellada,
           kaross: detaljer.kaross,
           farg: detaljer.farg,
-          stad: detaljer.stad,
           momsbil: detaljer.momsbil,
           pris_exkl_moms: detaljer.pris_exkl_moms,
         })

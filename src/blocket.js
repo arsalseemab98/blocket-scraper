@@ -150,8 +150,7 @@ export function formateraAnnons(annons) {
 
     // Pris & plats
     pris: pris,
-    region: annons.location || null,
-    kommun: annons.municipality || null,
+    stad: annons.location || null,  // Staden från API:et (Luleå, Boden, etc.)
 
     // Säljare
     saljare_namn: annons.organisation_name || null,
@@ -329,14 +328,15 @@ export async function hamtaMomsInfo(url) {
 
 /**
  * Hämta ALLA detaljer från enskild annons-sida
- * Returnerar { vaxellada, kaross, farg, kommun, momsbil, pris_exkl_moms }
+ * Returnerar { vaxellada, kaross, farg, momsbil, pris_exkl_moms }
+ *
+ * OBS: stad hämtas nu från sök-API:et (annons.location) istället för från sidan
  */
 export async function hamtaDetaljer(url) {
   const result = {
     vaxellada: null,
     kaross: null,
     farg: null,
-    stad: null,
     momsbil: false,
     pris_exkl_moms: null,
   };
@@ -420,30 +420,7 @@ export async function hamtaDetaljer(url) {
       result.pris_exkl_moms = parseInt(momsMatch[1].replace(/\s/g, ''));
     }
 
-    // 6. Extrahera stad från adress
-    // Mönster 1: Google Maps länk med adress "...query=Gatuadress%2C%20123%2045%20STAD"
-    const mapsMatch = cleanHtml.match(/maps\/search\/\?api=1&query=[^"]*%20(\d{3})%20(\d{2})%20([A-Z%C3%85%C3%84%C3%96]+)/i);
-    if (mapsMatch) {
-      // Avkoda URL-encoded stad (ex: SKELLEFTE%C3%85 → SKELLEFTEÅ)
-      try {
-        const encodedStad = mapsMatch[3];
-        const stad = decodeURIComponent(encodedStad);
-        // Formatera: SKELLEFTEÅ → Skellefteå
-        result.stad = stad.charAt(0).toUpperCase() + stad.slice(1).toLowerCase();
-      } catch (e) {
-        // Fallback om decoding misslyckas
-      }
-    }
-
-    // Mönster 2: Ren text adress "123 45 STAD" eller "12345 STAD"
-    if (!result.stad) {
-      const adressMatch = cleanHtml.match(/(\d{3}\s?\d{2})\s+([A-ZÅÄÖ][A-ZÅÄÖ\-]+)(?:<|"|,|\s*$)/);
-      if (adressMatch) {
-        const stad = adressMatch[2];
-        // Formatera: SKELLEFTEÅ → Skellefteå
-        result.stad = stad.charAt(0).toUpperCase() + stad.slice(1).toLowerCase();
-      }
-    }
+    // OBS: Stad hämtas nu från sök-API:et (annons.location) istället
 
     return result;
   } catch (error) {

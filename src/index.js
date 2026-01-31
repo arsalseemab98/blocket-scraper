@@ -128,7 +128,7 @@ async function runScraper() {
             const created = await createAnnons({
               ...annons,
               region: region,
-              stad: detaljer.stad,
+              // stad kommer nu från annons.stad (sök-API:et) via spread
               vaxellada: detaljer.vaxellada,
               kaross: detaljer.kaross,
               farg: detaljer.farg,
@@ -140,7 +140,7 @@ async function runScraper() {
               stats.nya++;
               const momsText = detaljer.momsbil ? ` 💵 MOMS` : '';
               const detaljText = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(', ');
-              const stadText = detaljer.stad ? ` 📍 ${detaljer.stad}` : '';
+              const stadText = annons.stad ? ` 📍 ${annons.stad}` : '';
               console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr${momsText} | ${detaljText || '-'} | ${region}${stadText}`);
 
               // Spara för slutrapport
@@ -150,7 +150,7 @@ async function runScraper() {
                 pris: annons.pris,
                 arsmodell: annons.arsmodell,
                 region: region,
-                stad: detaljer.stad,
+                stad: annons.stad,  // Kommer från sök-API:et
                 regnummer: annons.regnummer,
                 url: annons.url,
                 momsbil: detaljer.momsbil,
@@ -185,23 +185,28 @@ async function runScraper() {
               );
             }
 
-            // Komplettera detaljer om de saknas (växellåda eller stad)
-            if ((!existing.vaxellada || !existing.stad) && annons.url) {
+            // Komplettera stad från API om den saknas
+            if (!existing.stad && annons.stad) {
+              await updateAnnons(existing.id, { stad: annons.stad });
+              stats.kompletterade++;
+              console.log(`  🔧 KOMPLETTERAD stad: ${annons.marke} ${annons.modell} | 📍 ${annons.stad}`);
+            }
+
+            // Komplettera detaljer om de saknas (växellåda, kaross, färg)
+            if (!existing.vaxellada && annons.url) {
               const detaljer = await hamtaDetaljer(annons.url);
 
-              if (detaljer.vaxellada || detaljer.kaross || detaljer.farg || detaljer.stad) {
+              if (detaljer.vaxellada || detaljer.kaross || detaljer.farg) {
                 await updateAnnons(existing.id, {
                   vaxellada: detaljer.vaxellada,
                   kaross: detaljer.kaross,
                   farg: detaljer.farg,
-                  stad: detaljer.stad,
                   momsbil: detaljer.momsbil,
                   pris_exkl_moms: detaljer.pris_exkl_moms,
                 });
                 stats.kompletterade++;
                 const detaljText = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(', ');
-                const stadText = detaljer.stad ? ` | 📍 ${detaljer.stad}` : '';
-                console.log(`  🔧 KOMPLETTERAD: ${annons.marke} ${annons.modell}: ${detaljText}${stadText}`);
+                console.log(`  🔧 KOMPLETTERAD detaljer: ${annons.marke} ${annons.modell}: ${detaljText}`);
               }
 
               await new Promise((r) => setTimeout(r, 200));
