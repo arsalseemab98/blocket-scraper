@@ -17,7 +17,7 @@
  */
 
 import cron from "node-cron";
-import { sokAllaSidor, hamtaDetaljer, LAN_KODER } from "./blocket.js";
+import { sokAllaSidor, hamtaDetaljer, kollaOmSald, LAN_KODER } from "./blocket.js";
 import {
   startScraperLog,
   finishScraperLog,
@@ -26,6 +26,8 @@ import {
   updateAnnons,
   loggaPrisandring,
   markeraBorttagna,
+  hamtaEjSeddaAnnonser,
+  markeraAnnonsSald,
   beraknaMarknadsstatistik,
 } from "./database.js";
 
@@ -202,10 +204,46 @@ async function runScraper() {
       }
     }
 
-    // Markera borttagna annonser (ej sedda på 2 dagar)
-    console.log("\n🗑️  Markerar borttagna annonser...");
-    const borttagna = await markeraBorttagna(2);
-    console.log(`   ${borttagna} annonser markerade som borttagna`);
+    // ========================================
+    // KOLLA SÅLDA ANNONSER - besök URL:er
+    // ========================================
+    console.log("\n🔍 Kollar om annonser är sålda...");
+
+    // Hämta annonser som INTE sågs i sökningen
+    const ejSedda = await hamtaEjSeddaAnnonser(seddaIds);
+    console.log(`   ${ejSedda.length} annonser att kontrollera`);
+
+    let saldaCount = 0;
+    const saldaLista = [];
+
+    // Kolla varje annons (max 100 per körning för att inte överbelasta)
+    const attKolla = ejSedda.slice(0, 100);
+
+    for (const annons of attKolla) {
+      const url = annons.url || `https://www.blocket.se/mobility/item/${annons.blocket_id}`;
+      const { borttagen, anledning } = await kollaOmSald(url);
+
+      if (borttagen) {
+        await markeraAnnonsSald(annons.id, anledning);
+        saldaCount++;
+        saldaLista.push({
+          ...annons,
+          anledning,
+        });
+        console.log(`   🏷️  SÅLD: ${annons.marke} ${annons.modell} (${annons.regnummer || '-'}) - ${anledning}`);
+      }
+
+      // Vänta lite mellan requests
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    console.log(`   ✅ ${saldaCount} annonser markerade som sålda`);
+
+    // Fallback: Markera gamla som borttagna (ej sedda på 7 dagar)
+    const borttagna = await markeraBorttagna(7);
+    if (borttagna > 0) {
+      console.log(`   🗑️  ${borttagna} gamla annonser markerade som borttagna (7+ dagar)`);
+    }
 
     // Beräkna daglig statistik
     console.log("\n📊 Beräknar marknadsstatistik...");
@@ -225,7 +263,7 @@ async function runScraper() {
     console.log(`   • NYA annonser:       ${stats.nya} 🆕`);
     console.log(`   • Kompletterade:      ${stats.kompletterade} 🔧`);
     console.log(`   • Prisändringar:      ${stats.prisandringar} 💰`);
-    console.log(`   • Borttagna (sålda?): ${borttagna} 🗑️`);
+    console.log(`   • SÅLDA (verifierat): ${saldaCount} 🏷️`);
     console.log("=".repeat(60));
 
     // Visa lista över NYA annonser
@@ -244,6 +282,18 @@ async function runScraper() {
       }
     } else {
       console.log("\n📭 Inga nya annonser sedan förra körningen");
+    }
+
+    // Visa lista över SÅLDA annonser
+    if (saldaLista.length > 0) {
+      console.log("\n🏷️  SÅLDA ANNONSER DENNA KÖRNING:");
+      console.log("-".repeat(60));
+      saldaLista.slice(0, 10).forEach((bil, i) => {
+        console.log(`${i + 1}. ${bil.marke} ${bil.modell} | 🔢 ${bil.regnummer || '-'} | ${bil.anledning}`);
+      });
+      if (saldaLista.length > 10) {
+        console.log(`\n   ... och ${saldaLista.length - 10} fler sålda annonser`);
+      }
     }
 
     console.log("\n" + "=".repeat(60) + "\n");

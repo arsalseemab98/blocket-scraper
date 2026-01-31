@@ -165,6 +165,46 @@ export async function markeraBorttagna(dagarSedanSedd = 2) {
 }
 
 /**
+ * Hämta annonser som EJ sågs i dagens sökning (för att kolla om de är sålda)
+ * Returnerar annonser som inte uppdaterats senaste timmen
+ */
+export async function hamtaEjSeddaAnnonser(seddaIds) {
+  // Hämta alla aktiva annonser som INTE finns i seddaIds
+  const { data, error } = await supabase
+    .from("blocket_annonser")
+    .select("id, blocket_id, url, marke, modell, regnummer")
+    .is("borttagen", null);
+
+  if (error) {
+    console.error("❌ Kunde inte hämta ej sedda annonser:", error.message);
+    return [];
+  }
+
+  // Filtrera bort de som vi såg i sökningen
+  return data.filter(a => !seddaIds.has(a.blocket_id));
+}
+
+/**
+ * Markera en specifik annons som såld/borttagen
+ */
+export async function markeraAnnonsSald(id, anledning = "SÅLD") {
+  const { error } = await supabase
+    .from("blocket_annonser")
+    .update({
+      borttagen: new Date().toISOString(),
+      borttagen_anledning: anledning,
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error("❌ Kunde inte markera annons som såld:", error.message);
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Spara daglig marknadsstatistik
  */
 export async function sparaMarknadsdata(datum, region, marke, stats) {

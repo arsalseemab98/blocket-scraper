@@ -418,4 +418,38 @@ export async function hamtaDetaljer(url) {
     return result;
   }
 }
-// Build trigger: 20260131083616
+
+/**
+ * Kolla om en annons är såld/borttagen genom att besöka URL:en
+ * Baserad på: https://www.blocket.se/mobility/item/20486291
+ *
+ * Returnerar { borttagen: true/false, anledning: "SÅLD"|"404"|null }
+ */
+export async function kollaOmSald(url) {
+  try {
+    const response = await fetch(url, { headers: HEADERS });
+    const html = await response.text();
+
+    // Mönster 1: "Den här annonsen är inte längre tillgänglig"
+    // Varan har sålts eller tagits bort från marknaden av säljaren
+    if (html.includes("annonsen är inte längre tillgänglig") ||
+        html.includes("har sålts eller tagits bort")) {
+      return { borttagen: true, anledning: "SÅLD" };
+    }
+
+    // Mönster 2: 404 sida
+    if (html.includes("Sidan hittades inte") ||
+        html.includes("<title>404</title>") ||
+        html.includes("Här hittar du allt, förutom den sidan")) {
+      return { borttagen: true, anledning: "404" };
+    }
+
+    // Annonsen finns fortfarande
+    return { borttagen: false, anledning: null };
+
+  } catch (error) {
+    console.error(`❌ Fel vid kontroll av ${url}: ${error.message}`);
+    // Vid nätverksfel, anta att annonsen fortfarande finns
+    return { borttagen: false, anledning: null };
+  }
+}
