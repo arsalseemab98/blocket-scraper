@@ -125,8 +125,18 @@ async function backfillDetails() {
 }
 
 backfillDetails()
-  .then(() => process.exit(0))
+  .then(() => {
+    console.log("✅ Backfill klar! Håller containern igång...");
+    console.log("   Du kan nu byta tillbaka till cron-mode i DigitalOcean.");
+    // Håll processen igång så att DO inte startar om
+    setInterval(() => {
+      console.log(`💤 Idle... ${new Date().toISOString()}`);
+    }, 60000);
+  })
   .catch((err) => {
     console.error("💥 Kritiskt fel:", err);
-    process.exit(1);
+    // Håll igång även vid fel så vi kan se loggarna
+    setInterval(() => {
+      console.log(`❌ Error state... ${new Date().toISOString()}`);
+    }, 60000);
   });
