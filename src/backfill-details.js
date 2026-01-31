@@ -28,9 +28,14 @@ async function backfillDetails() {
     .from("blocket_annonser")
     .select("*", { count: "exact", head: true })
     .is("vaxellada", null)
-    .is("borttagen", false);
+    .is("borttagen", null);
 
   console.log(`📊 Totalt ${count} annonser saknar detaljer\n`);
+
+  if (!count || count === 0) {
+    console.log("⚠️ Inga annonser att uppdatera!");
+    return;
+  }
 
   let processed = 0;
   let updated = 0;
@@ -43,7 +48,7 @@ async function backfillDetails() {
       .from("blocket_annonser")
       .select("id, blocket_id, url, marke, modell")
       .is("vaxellada", null)
-      .is("borttagen", false)
+      .is("borttagen", null)
       .range(offset, offset + BATCH_SIZE - 1);
 
     if (error) {
