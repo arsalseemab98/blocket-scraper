@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Cache bust: 2026-01-31 FIX RPC ERROR
-ARG CACHEBUST=6
+# Cache bust: 2026-01-31 BACK TO CRON MODE
+ARG CACHEBUST=7
 
 WORKDIR /app
 
@@ -17,6 +17,5 @@ COPY src/ ./src/
 # Miljövariabler (sätts vid deploy)
 ENV NODE_ENV=production
 
-# BACKFILL STAD - Fyller i saknade städer
-# Byt tillbaka till "src/index.js", "--cron" efter backfill
-CMD ["node", "src/backfill-stad.js"]
+# Normal cron-körning (2x/dag)
+CMD ["node", "src/index.js", "--cron"]
