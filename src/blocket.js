@@ -252,6 +252,40 @@ export async function sokBilar(options = {}) {
 }
 
 /**
+ * LIGHT SCRAPE: Hämta endast nyaste annonser (sida 1)
+ * Används för frekvent polling var 15:e minut
+ * Sorterat efter nyast först för att fånga nya annonser snabbt
+ */
+export async function sokNyaste(options = {}) {
+  const { lan } = options;
+
+  const params = {};
+  if (lan && LAN_KODER[lan.toLowerCase()]) {
+    params.location = LAN_KODER[lan.toLowerCase()];
+  }
+  // Sortera efter nyast (default på Blocket)
+  params.sort = "date";
+
+  const url = buildUrl(params);
+
+  try {
+    const response = await fetch(url, { headers: HEADERS });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const html = await response.text();
+    const { docs } = extractData(html);
+
+    return docs.map(formateraAnnons);
+  } catch (error) {
+    console.error(`❌ Fel vid light scrape: ${error.message}`);
+    return [];
+  }
+}
+
+/**
  * Hämta alla sidor för en sökning
  * Hämtar först metadata för att veta totalt antal sidor
  */

@@ -17,7 +17,7 @@
  */
 
 import cron from "node-cron";
-import { sokAllaSidor, hamtaDetaljer, kollaOmSald, LAN_KODER } from "./blocket.js";
+import { sokAllaSidor, sokNyaste, hamtaDetaljer, kollaOmSald, LAN_KODER } from "./blocket.js";
 import {
   startScraperLog,
   finishScraperLog,
@@ -333,6 +333,85 @@ async function runScraper() {
 }
 
 // ============================================
+// LIGHT SCRAPE - Snabb polling för nya bilar
+// ============================================
+
+async function runLightScrape() {
+  const now = new Date();
+  const hour = now.getHours();
+
+  // Kör endast mellan 07:00-22:00
+  if (hour < 7 || hour >= 22) {
+    console.log(`⏸️  Light scrape pausad (kl ${hour}:00 - körs endast 07:00-22:00)`);
+    return;
+  }
+
+  console.log("\n" + "-".repeat(40));
+  console.log("⚡ LIGHT SCRAPE - Söker nya annonser");
+  console.log(`📅 ${now.toLocaleString("sv-SE")}`);
+  console.log("-".repeat(40));
+
+  let nyaAnnonser = 0;
+  let totaltHittade = 0;
+
+  try {
+    for (const region of REGIONER) {
+      // Hämta endast sida 1 (nyaste annonser)
+      const annonser = await sokNyaste({ lan: region });
+      totaltHittade += annonser.length;
+
+      for (const annons of annonser) {
+        if (!annons.blocket_id) continue;
+
+        // Kolla om den redan finns
+        const existing = await findAnnons(annons.blocket_id);
+
+        if (!existing) {
+          // NY ANNONS - hämta detaljer och spara
+          let detaljer = {
+            vaxellada: null,
+            kaross: null,
+            farg: null,
+            momsbil: false,
+            pris_exkl_moms: null
+          };
+
+          if (annons.url) {
+            detaljer = await hamtaDetaljer(annons.url);
+            await new Promise((r) => setTimeout(r, 200));
+          }
+
+          const created = await createAnnons({
+            ...annons,
+            region: region,
+            vaxellada: detaljer.vaxellada,
+            kaross: detaljer.kaross,
+            farg: detaljer.farg,
+            momsbil: detaljer.momsbil,
+            pris_exkl_moms: detaljer.pris_exkl_moms,
+          });
+
+          if (created) {
+            nyaAnnonser++;
+            const stadText = annons.stad ? ` | 📍 ${annons.stad}` : '';
+            console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr | ${region}${stadText}`);
+          }
+        }
+      }
+
+      // Kort paus mellan regioner
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    console.log(`\n⚡ Light scrape klar: ${nyaAnnonser} nya av ${totaltHittade} scannade`);
+    console.log("-".repeat(40) + "\n");
+
+  } catch (error) {
+    console.error("❌ Light scrape fel:", error.message);
+  }
+}
+
+// ============================================
 // HUVUDPROGRAM
 // ============================================
 
@@ -340,28 +419,41 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.includes("--cron")) {
-    // Kör med cron-schema: 2 gånger per dag (06:00 och 18:00)
-    console.log("⏰ Startar cron-schema: Kl 06:00 och 18:00 varje dag");
-    console.log("   Regioner: Norrbotten, Västerbotten, Jämtland, Västernorrland");
-    console.log("   Kör även en gång direkt...\n");
+    // Kör med cron-schema
+    console.log("⏰ Startar cron-schema:");
+    console.log("   📋 FULL SCRAPE: Kl 06:00 och 18:00 varje dag");
+    console.log("   ⚡ LIGHT SCRAPE: Var 15:e minut (07:00-22:00)");
+    console.log("   📍 Regioner: Norrbotten, Västerbotten, Jämtland, Västernorrland");
+    console.log("   Kör full scrape direkt...\n");
 
-    // Kör direkt vid start
+    // Kör full scrape direkt vid start
     await runScraper();
+
+    // ========================================
+    // LIGHT SCRAPE - var 15:e minut (07:00-22:00)
+    // ========================================
+    cron.schedule("*/15 * * * *", async () => {
+      await runLightScrape();
+    });
+
+    // ========================================
+    // FULL SCRAPE - 2x per dag
+    // ========================================
 
     // Morgon-körning kl 06:00
     cron.schedule("0 6 * * *", async () => {
-      console.log("\n⏰ MORGON-KÖRNING (06:00) - Startar scraping...");
+      console.log("\n⏰ MORGON-KÖRNING (06:00) - Startar full scraping...");
       await runScraper();
     });
 
     // Kvälls-körning kl 18:00
     cron.schedule("0 18 * * *", async () => {
-      console.log("\n⏰ KVÄLLS-KÖRNING (18:00) - Startar scraping...");
+      console.log("\n⏰ KVÄLLS-KÖRNING (18:00) - Startar full scraping...");
       await runScraper();
     });
 
     // Håll processen igång
-    console.log("\n🔄 Bot aktiv - Väntar på nästa körning (06:00 eller 18:00)...");
+    console.log("\n🔄 Bot aktiv - Light scrape var 15:e min, Full scrape 06:00 & 18:00...");
   } else {
     // Kör en gång
     await runScraper();
