@@ -161,7 +161,12 @@ async function runScraper() {
             // ========================================
             // BEFINTLIG ANNONS
             // ========================================
-            await updateAnnons(existing.id, {});
+            // Uppdatera publicerad om den saknas
+            const updates = {};
+            if (!existing.publicerad && annons.publicerad) {
+              updates.publicerad = annons.publicerad;
+            }
+            await updateAnnons(existing.id, updates);
             stats.uppdaterade++;
 
             // Kolla prisändring
