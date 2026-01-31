@@ -341,67 +341,41 @@ export async function hamtaDetaljer(url) {
     }
 
     const html = await response.text();
+    const cleanHtml = html.replace(/&nbsp;/g, ' ');
 
-    // Försök hitta JSON-data i script-taggar (base64-kodad)
-    const pattern = /<script[^>]*type="application\/json"[^>]*>([^<]+)<\/script>/g;
-    let match;
-
-    while ((match = pattern.exec(html)) !== null) {
-      try {
-        const decoded = Buffer.from(match[1], "base64").toString("utf-8");
-        const data = JSON.parse(decoded);
-
-        // Leta efter ad-data i queries
-        if (data.queries) {
-          for (const query of data.queries) {
-            const adData = query?.state?.data;
-
-            // Kolla om det är en ad med detaljer
-            if (adData && (adData.gearbox || adData.body_type || adData.color || adData.municipality)) {
-              result.vaxellada = adData.gearbox || null;
-              result.kaross = adData.body_type || null;
-              result.farg = adData.color || null;
-              result.kommun = adData.municipality || null;
-            }
-          }
+    // 1. Extrahera från og:title - format: "Märke Modell - År - Färg - Hk - Kaross | BLOCKET"
+    const ogTitleMatch = cleanHtml.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
+    if (ogTitleMatch) {
+      const title = ogTitleMatch[1];
+      // Parsa titel: "Begagnad bil till salu: Kia Sportage - 2023 - Blå - 265 Hk - Kombi | BLOCKET"
+      const parts = title.split(' - ');
+      if (parts.length >= 4) {
+        // Färg är oftast 3:e delen (efter märke/modell och år)
+        const possibleColor = parts[2]?.trim();
+        if (possibleColor && !possibleColor.match(/^\d+$/) && possibleColor.length < 20) {
+          result.farg = possibleColor;
         }
-      } catch (e) {
-        continue;
+        // Kaross är oftast sista delen före " | BLOCKET"
+        const lastPart = parts[parts.length - 1]?.replace(/\s*\|.*$/, '').trim();
+        const karossTypes = ['Sedan', 'Kombi', 'SUV', 'Halvkombi', 'Cab', 'Coupé', 'Coupe', 'Minibuss', 'Pickup'];
+        if (karossTypes.some(k => lastPart?.toLowerCase().includes(k.toLowerCase()))) {
+          result.kaross = lastPart;
+        }
       }
     }
 
-    // Fallback: Sök efter detaljer i HTML med regex
-    const cleanHtml = html.replace(/&nbsp;/g, ' ');
-
-    // Växellåda
-    if (!result.vaxellada) {
-      const gearMatch = cleanHtml.match(/Växellåda[:\s]*<[^>]*>([^<]+)</i) ||
-                        cleanHtml.match(/"gearbox"[:\s]*"([^"]+)"/i);
-      if (gearMatch) result.vaxellada = gearMatch[1].trim();
+    // 2. Extrahera växellåda från description
+    const descMatch = cleanHtml.match(/<meta\s+(?:name="description"|property="og:description")\s+content="([^"]+)"/i);
+    if (descMatch) {
+      const desc = descMatch[1].toLowerCase();
+      if (desc.includes('automat')) {
+        result.vaxellada = 'Automat';
+      } else if (desc.includes('manuell')) {
+        result.vaxellada = 'Manuell';
+      }
     }
 
-    // Kaross
-    if (!result.kaross) {
-      const bodyMatch = cleanHtml.match(/Karosstyp[:\s]*<[^>]*>([^<]+)</i) ||
-                        cleanHtml.match(/"body_type"[:\s]*"([^"]+)"/i);
-      if (bodyMatch) result.kaross = bodyMatch[1].trim();
-    }
-
-    // Färg
-    if (!result.farg) {
-      const colorMatch = cleanHtml.match(/Färg[:\s]*<[^>]*>([^<]+)</i) ||
-                         cleanHtml.match(/"color"[:\s]*"([^"]+)"/i);
-      if (colorMatch) result.farg = colorMatch[1].trim();
-    }
-
-    // Kommun/Ort
-    if (!result.kommun) {
-      const munMatch = cleanHtml.match(/"municipality"[:\s]*"([^"]+)"/i) ||
-                       cleanHtml.match(/"location_name"[:\s]*"([^"]+)"/i);
-      if (munMatch) result.kommun = munMatch[1].trim();
-    }
-
-    // Moms-info
+    // 3. Moms-info
     const momsMatch = cleanHtml.match(/\((\d[\d\s]*)\s*kr\s*exkl\.?\s*moms\)/i);
     if (momsMatch) {
       result.momsbil = true;
