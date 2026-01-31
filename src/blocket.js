@@ -422,16 +422,29 @@ export async function hamtaDetaljer(url) {
     }
 
     // 6. Extrahera stad från adress (FALLBACK när API saknar location)
-    // Mönster: Google Maps länk med postnr+stad "...query=83171%20%C3%96stersund"
-    const mapsMatch = cleanHtml.match(/maps\/search\/\?api=1[^"]*query=(\d{5})%20([^"&]+)/i);
-    if (mapsMatch) {
+    // Två mönster:
+    // A) Privat: "query=83171%20Östersund" (postnr + stad)
+    // B) Handlare: "query=Gräddvägen%2019%2C%20906%2020%20Umeå" (gata, postnr, stad)
+
+    // Försök mönster A först (enklare)
+    let mapsMatch = cleanHtml.match(/maps\/search\/\?api=1[^"]*query=(\d{5})%20([^"&%]+)/i);
+
+    // Om inte, försök mönster B (gata, postnr, stad)
+    if (!mapsMatch) {
+      // Matcha: ...%20XXXXX%20STAD där XXXXX är postnummer
+      mapsMatch = cleanHtml.match(/maps\/search\/\?api=1[^"]*%20(\d{3})%20(\d{2})%20([^"&]+)/i);
+      if (mapsMatch) {
+        // Grupp 3 är staden
+        try {
+          const stad = decodeURIComponent(mapsMatch[3]);
+          result.stad = stad.charAt(0).toUpperCase() + stad.slice(1).toLowerCase();
+        } catch (e) {}
+      }
+    } else {
       try {
         const stad = decodeURIComponent(mapsMatch[2]);
-        // Formatera: ÖSTERSUND → Östersund
         result.stad = stad.charAt(0).toUpperCase() + stad.slice(1).toLowerCase();
-      } catch (e) {
-        // Fallback om decoding misslyckas
-      }
+      } catch (e) {}
     }
 
     return result;
