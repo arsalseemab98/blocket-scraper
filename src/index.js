@@ -354,6 +354,9 @@ async function runLightScrape() {
   let nyaAnnonser = 0;
   let totaltHittade = 0;
 
+  // Starta loggning för light scrape
+  const logId = await startScraperLog(REGIONER, [], "light");
+
   try {
     for (const region of REGIONER) {
       // Hämta endast sida 1 (nyaste annonser)
@@ -403,11 +406,24 @@ async function runLightScrape() {
       await new Promise((r) => setTimeout(r, 500));
     }
 
+    // Avsluta loggning
+    if (logId) {
+      await finishScraperLog(logId, {
+        hittade: totaltHittade,
+        nya: nyaAnnonser,
+        uppdaterade: 0,
+        prisandringar: 0,
+      });
+    }
+
     console.log(`\n⚡ Light scrape klar: ${nyaAnnonser} nya av ${totaltHittade} scannade`);
     console.log("-".repeat(40) + "\n");
 
   } catch (error) {
     console.error("❌ Light scrape fel:", error.message);
+    if (logId) {
+      await finishScraperLog(logId, { hittade: totaltHittade, nya: nyaAnnonser }, error.message);
+    }
   }
 }
 

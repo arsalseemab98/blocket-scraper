@@ -19,14 +19,18 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /**
  * Starta ny scraper-körning och logga
+ * @param {string[]} regioner - Regioner som söks
+ * @param {string[]} marken - Märken som söks
+ * @param {string} scrapeType - "full" eller "light"
  */
-export async function startScraperLog(regioner, marken) {
+export async function startScraperLog(regioner, marken, scrapeType = "full") {
   const { data, error } = await supabase
     .from("blocket_scraper_log")
     .insert({
       status: "running",
       regioner_sokta: regioner,
       marken_sokta: marken,
+      scrape_type: scrapeType,
     })
     .select()
     .single();

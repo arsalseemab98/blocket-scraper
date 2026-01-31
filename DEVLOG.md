@@ -34,3 +34,19 @@
   - Cron: `*/15 * * * *` with hour check (7-22)
 - **Commit:** `a7dd58f`
 - **Expected improvement:** Capture 95%+ of all cars instead of ~60%
+
+### Updated: Fordonlista Log Page
+- **Problem:** Log page only showed basic stats, hard to understand what scraper is doing
+- **Solution:** Complete redesign of `/blocket-logs` page in fordonlista
+- **New features:**
+  - Live status banner (shows if scraper is running, time since last run)
+  - Schedule info card (Full scrape 06:00 & 18:00, Light scrape var 15 min)
+  - "Today" stats: new ads today, sold ads today
+  - Region breakdown: active ads per Norrland region
+  - Recent NEW cars (last 24h) with full details: make, model, price, mileage, city, seller type
+  - Recent SOLD cars (last 24h) with sold reason (SÅLD/404)
+  - Expandable lists (show 5 by default, click to show all)
+  - External links to Blocket for each car
+- **Files changed:**
+  - `fordonlista/app/blocket-logs/page.tsx`
+  - `fordonlista/components/blocket-logs/blocket-logs-view.tsx`

@@ -14,6 +14,7 @@
 
 - [ ] Monitor light scrape performance
 - [ ] Verify quick-selling cars are now captured
+- [x] Update log page in fordonlista with detailed views
 
 ## Future Improvements
 
