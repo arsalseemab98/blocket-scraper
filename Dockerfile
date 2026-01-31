@@ -17,5 +17,5 @@ COPY src/ ./src/
 # Miljövariabler (sätts vid deploy)
 ENV NODE_ENV=production
 
-# BACKFILL med fixad regex för svenska tecken
-CMD ["node", "src/backfill-stad.js"]
+# Normal cron-körning (2x/dag)
+CMD ["node", "src/index.js", "--cron"]
