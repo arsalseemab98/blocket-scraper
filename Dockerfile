@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Cache bust: 2026-01-31T14:05 - PARALLEL BACKFILL
-ARG CACHEBUST=3
+# Cache bust: 2026-01-31 BACKFILL STAD
+ARG CACHEBUST=4
 
 WORKDIR /app
 
@@ -17,6 +17,6 @@ COPY src/ ./src/
 # Miljövariabler (sätts vid deploy)
 ENV NODE_ENV=production
 
-# Kör scraping en gång (för att fylla i publicerad-datum)
-# Byt till --cron för schemalagd körning
-CMD ["node", "src/index.js"]
+# BACKFILL STAD - Fyller i saknade städer
+# Byt tillbaka till "src/index.js", "--cron" efter backfill
+CMD ["node", "src/backfill-stad.js"]
