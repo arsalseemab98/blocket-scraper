@@ -192,21 +192,28 @@ async function runScraper() {
               console.log(`  🔧 KOMPLETTERAD stad: ${annons.marke} ${annons.modell} | 📍 ${annons.stad}`);
             }
 
-            // Komplettera detaljer om de saknas (växellåda, kaross, färg)
-            if (!existing.vaxellada && annons.url) {
+            // Komplettera detaljer om de saknas (växellåda, kaross, färg, eller stad som fallback)
+            if ((!existing.vaxellada || !existing.stad) && annons.url) {
               const detaljer = await hamtaDetaljer(annons.url);
 
-              if (detaljer.vaxellada || detaljer.kaross || detaljer.farg) {
-                await updateAnnons(existing.id, {
-                  vaxellada: detaljer.vaxellada,
-                  kaross: detaljer.kaross,
-                  farg: detaljer.farg,
-                  momsbil: detaljer.momsbil,
-                  pris_exkl_moms: detaljer.pris_exkl_moms,
-                });
+              const updates = {};
+              if (detaljer.vaxellada) updates.vaxellada = detaljer.vaxellada;
+              if (detaljer.kaross) updates.kaross = detaljer.kaross;
+              if (detaljer.farg) updates.farg = detaljer.farg;
+              if (detaljer.momsbil) updates.momsbil = detaljer.momsbil;
+              if (detaljer.pris_exkl_moms) updates.pris_exkl_moms = detaljer.pris_exkl_moms;
+
+              // Fallback: hämta stad från sidan om API saknar den
+              if (!existing.stad && !annons.stad && detaljer.stad) {
+                updates.stad = detaljer.stad;
+              }
+
+              if (Object.keys(updates).length > 0) {
+                await updateAnnons(existing.id, updates);
                 stats.kompletterade++;
                 const detaljText = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(', ');
-                console.log(`  🔧 KOMPLETTERAD detaljer: ${annons.marke} ${annons.modell}: ${detaljText}`);
+                const stadText = updates.stad ? ` | 📍 ${updates.stad}` : '';
+                console.log(`  🔧 KOMPLETTERAD: ${annons.marke} ${annons.modell}: ${detaljText}${stadText}`);
               }
 
               await new Promise((r) => setTimeout(r, 200));

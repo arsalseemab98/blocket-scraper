@@ -337,6 +337,7 @@ export async function hamtaDetaljer(url) {
     vaxellada: null,
     kaross: null,
     farg: null,
+    stad: null,  // Fallback när API saknar location
     momsbil: false,
     pris_exkl_moms: null,
   };
@@ -420,7 +421,18 @@ export async function hamtaDetaljer(url) {
       result.pris_exkl_moms = parseInt(momsMatch[1].replace(/\s/g, ''));
     }
 
-    // OBS: Stad hämtas nu från sök-API:et (annons.location) istället
+    // 6. Extrahera stad från adress (FALLBACK när API saknar location)
+    // Mönster: Google Maps länk med postnr+stad "...query=83171%20%C3%96stersund"
+    const mapsMatch = cleanHtml.match(/maps\/search\/\?api=1[^"]*query=(\d{5})%20([^"&]+)/i);
+    if (mapsMatch) {
+      try {
+        const stad = decodeURIComponent(mapsMatch[2]);
+        // Formatera: ÖSTERSUND → Östersund
+        result.stad = stad.charAt(0).toUpperCase() + stad.slice(1).toLowerCase();
+      } catch (e) {
+        // Fallback om decoding misslyckas
+      }
+    }
 
     return result;
   } catch (error) {
