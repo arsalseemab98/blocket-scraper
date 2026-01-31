@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Cache bust: 2026-01-31 FIX INFINITE LOOP
-ARG CACHEBUST=5
+# Cache bust: 2026-01-31 FIX RPC ERROR
+ARG CACHEBUST=6
 
 WORKDIR /app
 

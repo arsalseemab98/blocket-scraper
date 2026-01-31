@@ -148,19 +148,23 @@ async function backfillStad() {
   console.log(`   • Hastighet:    ${(stats.processed/totalTime).toFixed(1)} annonser/sek`);
   console.log("=".repeat(60) + "\n");
 
-  // Visa slutstatus per region
-  const { data: regionStats } = await supabase.rpc('exec_sql', {
-    sql: `SELECT region, COUNT(*) as total, COUNT(stad) as med_stad,
-          ROUND(100.0 * COUNT(stad) / COUNT(*), 1) as procent
-          FROM blocket_annonser WHERE borttagen IS NULL
-          GROUP BY region ORDER BY procent DESC`
-  });
-
-  if (regionStats) {
-    console.log("\n📊 SLUTSTATUS PER REGION:");
-    regionStats.forEach(r => {
-      console.log(`   ${r.region}: ${r.procent}% (${r.med_stad}/${r.total})`);
+  // Visa slutstatus per region (optional - don't crash if RPC doesn't exist)
+  try {
+    const { data: regionStats } = await supabase.rpc('exec_sql', {
+      sql: `SELECT region, COUNT(*) as total, COUNT(stad) as med_stad,
+            ROUND(100.0 * COUNT(stad) / COUNT(*), 1) as procent
+            FROM blocket_annonser WHERE borttagen IS NULL
+            GROUP BY region ORDER BY procent DESC`
     });
+
+    if (regionStats) {
+      console.log("\n📊 SLUTSTATUS PER REGION:");
+      regionStats.forEach(r => {
+        console.log(`   ${r.region}: ${r.procent}% (${r.med_stad}/${r.total})`);
+      });
+    }
+  } catch (e) {
+    console.log("⚠️ Kunde inte hämta regionstatus (exec_sql RPC saknas)");
   }
 }
 
