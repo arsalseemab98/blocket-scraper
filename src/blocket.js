@@ -128,6 +128,11 @@ export function formateraAnnons(annons) {
     url = `https://www.blocket.se/mobility/item/${annons.id}`;
   }
 
+  // Konvertera timestamp till ISO-datum
+  const publicerad = annons.timestamp
+    ? new Date(annons.timestamp).toISOString()
+    : null;
+
   return {
     blocket_id: annons.id?.toString(),
     regnummer: annons.regno || null,
@@ -151,6 +156,9 @@ export function formateraAnnons(annons) {
     // Säljare
     saljare_namn: annons.organisation_name || null,
     saljare_typ: annons.organisation_name ? "handlare" : "privat",
+
+    // Datum
+    publicerad: publicerad,
 
     // URLs
     url: url,
