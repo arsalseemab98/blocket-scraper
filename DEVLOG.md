@@ -24,3 +24,13 @@
 ### Final stats
 - **City coverage:** 7,512 / 7,521 (99.88%)
 - **Missing:** 9 ads marked as OKÄND (truly no location data on Blocket)
+
+### Added: Light Scrape feature
+- **Problem:** Cars listed and sold between full scrapes (12h gap) were missed
+- **Solution:** Light scrape every 15 minutes (07:00-22:00)
+- **Implementation:**
+  - `sokNyaste()` - fetches only page 1, sorted by newest
+  - `runLightScrape()` - quick scan, only processes NEW cars
+  - Cron: `*/15 * * * *` with hour check (7-22)
+- **Commit:** `a7dd58f`
+- **Expected improvement:** Capture 95%+ of all cars instead of ~60%

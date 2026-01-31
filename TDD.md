@@ -8,11 +8,12 @@
 - [x] Re-run backfill with fixed regex
 - [x] Switch back to cron mode
 - [x] Deploy to DigitalOcean
+- [x] Add light scrape every 15 minutes (07:00-22:00)
 
 ## Pending
 
-- [ ] Monitor next scheduled scrape (06:00 or 18:00)
-- [ ] Verify new ads get city data correctly with fixed regex
+- [ ] Monitor light scrape performance
+- [ ] Verify quick-selling cars are now captured
 
 ## Future Improvements
 
