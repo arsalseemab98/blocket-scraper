@@ -364,18 +364,48 @@ export async function hamtaDetaljer(url) {
       }
     }
 
-    // 2. Extrahera växellåda från description
-    const descMatch = cleanHtml.match(/<meta\s+(?:name="description"|property="og:description")\s+content="([^"]+)"/i);
-    if (descMatch) {
-      const desc = descMatch[1].toLowerCase();
-      if (desc.includes('automat')) {
+    // 2. Extrahera växellåda - först från HTML-struktur, sen från description
+    // Mönster: <span>Växellåda</span><p>Automatisk</p> eller <dt>Växellåda</dt><dd>Automatisk</dd>
+    const gearMatch = cleanHtml.match(/Växellåda<\/(?:span|dt)><(?:p|dd)[^>]*>([^<]+)/i);
+    if (gearMatch) {
+      const gearValue = gearMatch[1].trim();
+      if (gearValue.toLowerCase().includes('automat')) {
         result.vaxellada = 'Automat';
-      } else if (desc.includes('manuell')) {
+      } else if (gearValue.toLowerCase().includes('manuell')) {
         result.vaxellada = 'Manuell';
       }
     }
 
-    // 3. Moms-info
+    // Fallback: kolla description
+    if (!result.vaxellada) {
+      const descMatch = cleanHtml.match(/<meta\s+(?:name="description"|property="og:description")\s+content="([^"]+)"/i);
+      if (descMatch) {
+        const desc = descMatch[1].toLowerCase();
+        if (desc.includes('automat')) {
+          result.vaxellada = 'Automat';
+        } else if (desc.includes('manuell')) {
+          result.vaxellada = 'Manuell';
+        }
+      }
+    }
+
+    // 3. Extrahera färg från HTML-struktur om inte från title
+    if (!result.farg) {
+      const colorMatch = cleanHtml.match(/Färg<\/(?:span|dt)><(?:p|dd)[^>]*>([^<]+)/i);
+      if (colorMatch) {
+        result.farg = colorMatch[1].trim();
+      }
+    }
+
+    // 4. Extrahera kaross från HTML-struktur om inte från title
+    if (!result.kaross) {
+      const bodyMatch = cleanHtml.match(/Kaross<\/(?:span|dt)><(?:p|dd)[^>]*>([^<]+)/i);
+      if (bodyMatch) {
+        result.kaross = bodyMatch[1].trim();
+      }
+    }
+
+    // 5. Moms-info
     const momsMatch = cleanHtml.match(/\((\d[\d\s]*)\s*kr\s*exkl\.?\s*moms\)/i);
     if (momsMatch) {
       result.momsbil = true;
