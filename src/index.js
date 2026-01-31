@@ -128,6 +128,7 @@ async function runScraper() {
             const created = await createAnnons({
               ...annons,
               region: region,
+              stad: detaljer.stad,
               vaxellada: detaljer.vaxellada,
               kaross: detaljer.kaross,
               farg: detaljer.farg,
@@ -139,7 +140,8 @@ async function runScraper() {
               stats.nya++;
               const momsText = detaljer.momsbil ? ` 💵 MOMS` : '';
               const detaljText = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(', ');
-              console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr${momsText} | ${detaljText || '-'} | ${region}`);
+              const stadText = detaljer.stad ? ` 📍 ${detaljer.stad}` : '';
+              console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr${momsText} | ${detaljText || '-'} | ${region}${stadText}`);
 
               // Spara för slutrapport
               nyaAnnonserLista.push({
@@ -148,6 +150,7 @@ async function runScraper() {
                 pris: annons.pris,
                 arsmodell: annons.arsmodell,
                 region: region,
+                stad: detaljer.stad,
                 regnummer: annons.regnummer,
                 url: annons.url,
                 momsbil: detaljer.momsbil,
@@ -182,21 +185,23 @@ async function runScraper() {
               );
             }
 
-            // Komplettera detaljer om de saknas
-            if (!existing.vaxellada && annons.url) {
+            // Komplettera detaljer om de saknas (växellåda eller stad)
+            if ((!existing.vaxellada || !existing.stad) && annons.url) {
               const detaljer = await hamtaDetaljer(annons.url);
 
-              if (detaljer.vaxellada || detaljer.kaross || detaljer.farg) {
+              if (detaljer.vaxellada || detaljer.kaross || detaljer.farg || detaljer.stad) {
                 await updateAnnons(existing.id, {
                   vaxellada: detaljer.vaxellada,
                   kaross: detaljer.kaross,
                   farg: detaljer.farg,
+                  stad: detaljer.stad,
                   momsbil: detaljer.momsbil,
                   pris_exkl_moms: detaljer.pris_exkl_moms,
                 });
                 stats.kompletterade++;
                 const detaljText = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(', ');
-                console.log(`  🔧 KOMPLETTERAD: ${annons.marke} ${annons.modell}: ${detaljText}`);
+                const stadText = detaljer.stad ? ` | 📍 ${detaljer.stad}` : '';
+                console.log(`  🔧 KOMPLETTERAD: ${annons.marke} ${annons.modell}: ${detaljText}${stadText}`);
               }
 
               await new Promise((r) => setTimeout(r, 200));
