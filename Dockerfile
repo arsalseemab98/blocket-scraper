@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Cache bust: 2026-01-31T12:40
-ARG CACHEBUST=1
+# Cache bust: 2026-01-31T14:30 - BACKFILL MODE
+ARG CACHEBUST=2
 
 WORKDIR /app
 
@@ -17,5 +17,6 @@ COPY src/ ./src/
 # Miljövariabler (sätts vid deploy)
 ENV NODE_ENV=production
 
-# Kör med cron
-CMD ["node", "src/index.js", "--cron"]
+# BACKFILL MODE - Kör en gång för att uppdatera befintliga annonser med detaljer
+# Byt tillbaka till: CMD ["node", "src/index.js", "--cron"] när backfill är klar
+CMD ["node", "src/backfill-details.js"]
