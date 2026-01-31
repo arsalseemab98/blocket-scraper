@@ -92,20 +92,20 @@ async function backfillDetails() {
   }
 
   const stats = { processed: 0, updated: 0, failed: 0, noData: 0 };
-  let offset = 0;
   let batchNum = 0;
   const startTime = Date.now();
 
-  while (offset < count) {
+  // Ingen offset! Processade annonser matchar inte längre WHERE vaxellada IS NULL
+  while (true) {
     batchNum++;
 
-    // Hämta en batch
+    // Hämta en batch - alltid från början (processade försvinner från resultatet)
     const { data: annonser, error } = await supabase
       .from("blocket_annonser")
       .select("id, blocket_id, url, marke, modell")
       .is("vaxellada", null)
       .is("borttagen", null)
-      .range(offset, offset + BATCH_SIZE - 1);
+      .limit(BATCH_SIZE);
 
     if (error) {
       console.error("❌ Fel vid hämtning:", error.message);
@@ -141,8 +141,6 @@ async function backfillDetails() {
       console.log(`\n📊 Progress: ${stats.processed}/${count} (${Math.round(stats.processed/count*100)}%)`);
       console.log(`   ⏱️ Hastighet: ${rate.toFixed(1)}/sek | Återstår: ~${Math.round(remaining/60)} min`);
     }
-
-    offset += BATCH_SIZE;
   }
 
   const totalTime = (Date.now() - startTime) / 1000;
