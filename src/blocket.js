@@ -69,6 +69,7 @@ const HEADERS = {
 
 /**
  * Extrahera data från Blockets base64-kodade JSON
+ * Returnerar { docs: [], metadata: {} }
  */
 function extractData(html) {
   const pattern = /<script[^>]*type="application\/json"[^>]*>([^<]+)<\/script>/g;
@@ -81,9 +82,13 @@ function extractData(html) {
 
       if (data.queries) {
         for (const query of data.queries) {
-          const docs = query?.state?.data?.docs;
+          const stateData = query?.state?.data;
+          const docs = stateData?.docs;
           if (docs && Array.isArray(docs) && docs.length > 0) {
-            return docs;
+            return {
+              docs,
+              metadata: stateData?.metadata || {},
+            };
           }
         }
       }
@@ -92,7 +97,7 @@ function extractData(html) {
     }
   }
 
-  return [];
+  return { docs: [], metadata: {} };
 }
 
 /**
@@ -225,40 +230,57 @@ export async function sokBilar(options = {}) {
     }
 
     const html = await response.text();
-    const annonser = extractData(html);
+    const { docs, metadata } = extractData(html);
 
-    console.log(`✅ Hittade ${annonser.length} bilar`);
+    console.log(`✅ Hittade ${docs.length} bilar`);
 
-    return annonser.map(formateraAnnons);
+    return {
+      annonser: docs.map(formateraAnnons),
+      metadata,
+    };
   } catch (error) {
     console.error(`❌ Fel vid sökning: ${error.message}`);
-    return [];
+    return { annonser: [], metadata: {} };
   }
 }
 
 /**
  * Hämta alla sidor för en sökning
+ * Hämtar först metadata för att veta totalt antal sidor
  */
-export async function sokAllaSidor(options = {}, maxSidor = 10) {
+export async function sokAllaSidor(options = {}) {
   const allaAnnonser = [];
-  let sida = 1;
 
-  while (sida <= maxSidor) {
-    const annonser = await sokBilar({ ...options, sida });
+  // Hämta första sidan för att få metadata med totalt antal sidor
+  const firstPage = await sokBilar({ ...options, sida: 1 });
+
+  if (firstPage.annonser.length === 0) {
+    return allaAnnonser;
+  }
+
+  allaAnnonser.push(...firstPage.annonser);
+
+  // Hämta totalt antal sidor från metadata
+  const totalPages = firstPage.metadata?.paging?.last || 1;
+  const totalAds = firstPage.metadata?.result_size?.match_count || firstPage.annonser.length;
+
+  console.log(`📊 Totalt ${totalAds} annonser på ${totalPages} sidor`);
+
+  // Hämta resterande sidor
+  for (let sida = 2; sida <= totalPages; sida++) {
+    console.log(`📄 Hämtar sida ${sida}/${totalPages}...`);
+
+    const { annonser } = await sokBilar({ ...options, sida });
 
     if (annonser.length === 0) break;
 
     allaAnnonser.push(...annonser);
 
-    // Blocket returnerar ~40 per sida
-    if (annonser.length < 35) break;
-
-    sida++;
-
-    // Vänta lite mellan requests
-    await new Promise((r) => setTimeout(r, 1000));
+    // Vänta mellan requests för att inte överbelasta
+    await new Promise((r) => setTimeout(r, 800));
   }
 
+  console.log(`✅ Totalt hämtat: ${allaAnnonser.length} annonser`);
   return allaAnnonser;
 }
 
