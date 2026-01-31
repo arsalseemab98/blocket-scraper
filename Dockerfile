@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# Cache bust: 2026-01-31T12:40
+ARG CACHEBUST=1
+
 WORKDIR /app
 
 # Kopiera package files
