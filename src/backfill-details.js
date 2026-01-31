@@ -2,7 +2,9 @@
 
 /**
  * Backfill-skript för att uppdatera befintliga annonser med detaljer
- * Hämtar växellåda, kaross, färg, kommun för alla annonser som saknar dessa
+ * Hämtar växellåda, kaross, färg för alla annonser som saknar dessa
+ *
+ * PARALLEL VERSION - 5 samtidiga requests för snabbare processing
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -14,13 +16,65 @@ const supabase = createClient(
 );
 
 const BATCH_SIZE = 100;
-const DELAY_MS = 300;
+const CONCURRENCY = 5;  // Antal parallella requests
+const DELAY_BETWEEN_BATCHES_MS = 500;  // Delay mellan batchar
+
+// Process en annons
+async function processAnnons(annons, stats, total) {
+  if (!annons.url) {
+    annons.url = `https://www.blocket.se/mobility/item/${annons.blocket_id}`;
+  }
+
+  try {
+    const detaljer = await hamtaDetaljer(annons.url);
+
+    if (detaljer.vaxellada || detaljer.kaross || detaljer.farg) {
+      const { error: updateError } = await supabase
+        .from("blocket_annonser")
+        .update({
+          vaxellada: detaljer.vaxellada,
+          kaross: detaljer.kaross,
+          farg: detaljer.farg,
+          momsbil: detaljer.momsbil,
+          pris_exkl_moms: detaljer.pris_exkl_moms,
+        })
+        .eq("id", annons.id);
+
+      if (!updateError) {
+        stats.updated++;
+        return { success: true, annons, detaljer };
+      } else {
+        stats.failed++;
+        return { success: false, annons, error: updateError.message };
+      }
+    } else {
+      // Ingen data - markera som försökt
+      await supabase
+        .from("blocket_annonser")
+        .update({ vaxellada: "" })
+        .eq("id", annons.id);
+
+      stats.noData++;
+      return { success: true, annons, noData: true };
+    }
+  } catch (err) {
+    stats.failed++;
+    return { success: false, annons, error: err.message };
+  }
+}
+
+// Process en chunk parallellt
+async function processChunk(chunk, stats, total) {
+  const promises = chunk.map(annons => processAnnons(annons, stats, total));
+  return Promise.all(promises);
+}
 
 async function backfillDetails() {
   console.log("\n" + "=".repeat(60));
-  console.log("🔄 BACKFILL: Uppdaterar befintliga annonser med detaljer");
+  console.log("🚀 BACKFILL PARALLEL: Uppdaterar annonser med detaljer");
   console.log("=".repeat(60));
   console.log(`📅 ${new Date().toLocaleString("sv-SE")}`);
+  console.log(`⚡ Concurrency: ${CONCURRENCY} parallella requests`);
   console.log("=".repeat(60) + "\n");
 
   // Hämta alla annonser som saknar detaljer
@@ -37,12 +91,14 @@ async function backfillDetails() {
     return;
   }
 
-  let processed = 0;
-  let updated = 0;
-  let failed = 0;
+  const stats = { processed: 0, updated: 0, failed: 0, noData: 0 };
   let offset = 0;
+  let batchNum = 0;
+  const startTime = Date.now();
 
   while (offset < count) {
+    batchNum++;
+
     // Hämta en batch
     const { data: annonser, error } = await supabase
       .from("blocket_annonser")
@@ -58,74 +114,49 @@ async function backfillDetails() {
 
     if (!annonser || annonser.length === 0) break;
 
-    console.log(`\n📦 Batch ${Math.floor(offset / BATCH_SIZE) + 1}: ${annonser.length} annonser`);
+    console.log(`\n📦 Batch ${batchNum}: ${annonser.length} annonser`);
 
-    for (const annons of annonser) {
-      processed++;
+    // Dela upp i chunks för parallell processing
+    for (let i = 0; i < annonser.length; i += CONCURRENCY) {
+      const chunk = annonser.slice(i, i + CONCURRENCY);
+      const results = await processChunk(chunk, stats, count);
 
-      if (!annons.url) {
-        // Bygg URL om den saknas
-        annons.url = `https://www.blocket.se/mobility/item/${annons.blocket_id}`;
-      }
+      stats.processed += chunk.length;
 
-      try {
-        const detaljer = await hamtaDetaljer(annons.url);
+      // Visa progress
+      const successCount = results.filter(r => r.success && !r.noData).length;
+      const noDataCount = results.filter(r => r.noData).length;
 
-        // Uppdatera om vi fick några detaljer
-        if (detaljer.vaxellada || detaljer.kaross || detaljer.farg || detaljer.kommun) {
-          const { error: updateError } = await supabase
-            .from("blocket_annonser")
-            .update({
-              vaxellada: detaljer.vaxellada,
-              kaross: detaljer.kaross,
-              farg: detaljer.farg,
-              kommun: detaljer.kommun,
-              momsbil: detaljer.momsbil,
-              pris_exkl_moms: detaljer.pris_exkl_moms,
-            })
-            .eq("id", annons.id);
+      process.stdout.write(`\r  ⚡ ${stats.processed}/${count} (${Math.round(stats.processed/count*100)}%) | ✅ ${stats.updated} | ⚠️ ${stats.noData} | ❌ ${stats.failed}    `);
+    }
 
-          if (!updateError) {
-            updated++;
-            const info = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(", ");
-            process.stdout.write(`\r  ✅ ${processed}/${count} - ${annons.marke} ${annons.modell}: ${info || "partial"}                    `);
-          } else {
-            failed++;
-          }
-        } else {
-          // Ingen data hittades - markera som försökt genom att sätta tom sträng
-          await supabase
-            .from("blocket_annonser")
-            .update({ vaxellada: "" })
-            .eq("id", annons.id);
+    // Kort paus mellan batchar
+    await new Promise(r => setTimeout(r, DELAY_BETWEEN_BATCHES_MS));
 
-          process.stdout.write(`\r  ⚠️  ${processed}/${count} - ${annons.marke} ${annons.modell}: ingen data                    `);
-        }
-
-        // Vänta mellan requests
-        await new Promise((r) => setTimeout(r, DELAY_MS));
-
-      } catch (err) {
-        failed++;
-        process.stdout.write(`\r  ❌ ${processed}/${count} - ${annons.marke} ${annons.modell}: ${err.message}                    `);
-      }
-
-      // Progress var 100:e
-      if (processed % 100 === 0) {
-        console.log(`\n📊 Progress: ${processed}/${count} (${Math.round(processed/count*100)}%) - Uppdaterade: ${updated}, Misslyckade: ${failed}`);
-      }
+    // Progress-rapport var 500:e
+    if (stats.processed % 500 === 0) {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const rate = stats.processed / elapsed;
+      const remaining = (count - stats.processed) / rate;
+      console.log(`\n📊 Progress: ${stats.processed}/${count} (${Math.round(stats.processed/count*100)}%)`);
+      console.log(`   ⏱️ Hastighet: ${rate.toFixed(1)}/sek | Återstår: ~${Math.round(remaining/60)} min`);
     }
 
     offset += BATCH_SIZE;
   }
 
+  const totalTime = (Date.now() - startTime) / 1000;
+
   console.log("\n\n" + "=".repeat(60));
   console.log("✅ BACKFILL KLAR!");
   console.log("=".repeat(60));
   console.log(`📊 STATISTIK:`);
-  console.log(`   • Processade:   ${processed}`);
-  console.log(`   • Uppdaterade:  ${updated}`);
-  console.log(`   • Misslyckade:  ${failed}`);
+  console.log(`   • Processade:   ${stats.processed}`);
+  console.log(`   • Uppdaterade:  ${stats.updated}`);
+  console.log(`   • Ingen data:   ${stats.noData}`);
+  console.log(`   • Misslyckade:  ${stats.failed}`);
+  console.log(`   • Total tid:    ${Math.round(totalTime/60)} min ${Math.round(totalTime%60)} sek`);
+  console.log(`   • Hastighet:    ${(stats.processed/totalTime).toFixed(1)} annonser/sek`);
   console.log("=".repeat(60) + "\n");
 }
 
@@ -133,14 +164,12 @@ backfillDetails()
   .then(() => {
     console.log("✅ Backfill klar! Håller containern igång...");
     console.log("   Du kan nu byta tillbaka till cron-mode i DigitalOcean.");
-    // Håll processen igång så att DO inte startar om
     setInterval(() => {
       console.log(`💤 Idle... ${new Date().toISOString()}`);
     }, 60000);
   })
   .catch((err) => {
     console.error("💥 Kritiskt fel:", err);
-    // Håll igång även vid fel så vi kan se loggarna
     setInterval(() => {
       console.log(`❌ Error state... ${new Date().toISOString()}`);
     }, 60000);
