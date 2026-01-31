@@ -7,6 +7,10 @@
  *
  * Körs på DigitalOcean, sparar till Supabase
  *
+ * Hämtar för VARJE annons:
+ * - Grunddata från sökresultat: märke, modell, år, pris, miltal, bränsle, region
+ * - Detaljer från annonssida: växellåda, kaross, färg, moms-info
+ *
  * Användning:
  *   node src/index.js              # Kör scraping en gång
  *   node src/index.js --cron       # Starta med cron-schema
@@ -38,7 +42,6 @@ const REGIONER = [
 ];
 
 // Märken att scrapa (null = alla märken i en sökning)
-// Vi kör BARA null för att få ALLA bilar, inte filtrerat per märke
 const MARKEN = [
   null, // Hämta ALLA bilar oavsett märke
 ];
@@ -53,7 +56,7 @@ async function runScraper() {
   console.log("=".repeat(60));
   console.log(`📅 ${new Date().toLocaleString("sv-SE")}`);
   console.log(`📍 Regioner: ${REGIONER.join(", ").toUpperCase()}`);
-  console.log(`🎯 Mål: Hitta NYA bilannonser`);
+  console.log(`🎯 Mål: Hitta NYA bilannonser + komplettera detaljer`);
   console.log("=".repeat(60) + "\n");
 
   // Samla alla nya annonser för slutrapport
@@ -64,6 +67,7 @@ async function runScraper() {
     nya: 0,
     uppdaterade: 0,
     prisandringar: 0,
+    kompletterade: 0,  // Befintliga annonser som fick detaljer
   };
 
   // Starta loggning
@@ -102,12 +106,13 @@ async function runScraper() {
           const existing = await findAnnons(annons.blocket_id);
 
           if (!existing) {
-            // NY ANNONS - hämta ALLA detaljer från annonssidan
+            // ========================================
+            // NY ANNONS - hämta ALLA detaljer
+            // ========================================
             let detaljer = {
               vaxellada: null,
               kaross: null,
               farg: null,
-              kommun: null,
               momsbil: false,
               pris_exkl_moms: null
             };
@@ -115,9 +120,7 @@ async function runScraper() {
             if (annons.url) {
               console.log(`  🔍 Hämtar detaljer för ${annons.marke} ${annons.modell}...`);
               detaljer = await hamtaDetaljer(annons.url);
-
-              // Vänta lite för att inte överbelasta
-              await new Promise((r) => setTimeout(r, 300));
+              await new Promise((r) => setTimeout(r, 200));
             }
 
             const created = await createAnnons({
@@ -126,7 +129,6 @@ async function runScraper() {
               vaxellada: detaljer.vaxellada,
               kaross: detaljer.kaross,
               farg: detaljer.farg,
-              kommun: detaljer.kommun,
               momsbil: detaljer.momsbil,
               pris_exkl_moms: detaljer.pris_exkl_moms,
             });
@@ -135,7 +137,7 @@ async function runScraper() {
               stats.nya++;
               const momsText = detaljer.momsbil ? ` 💵 MOMS` : '';
               const detaljText = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(', ');
-              console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr${momsText} | ${detaljText || '-'} | ${detaljer.kommun || region}`);
+              console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr${momsText} | ${detaljText || '-'} | ${region}`);
 
               // Spara för slutrapport
               nyaAnnonserLista.push({
@@ -144,7 +146,6 @@ async function runScraper() {
                 pris: annons.pris,
                 arsmodell: annons.arsmodell,
                 region: region,
-                kommun: detaljer.kommun,
                 regnummer: annons.regnummer,
                 url: annons.url,
                 momsbil: detaljer.momsbil,
@@ -155,7 +156,9 @@ async function runScraper() {
               });
             }
           } else {
-            // BEFINTLIG ANNONS - uppdatera senast_sedd
+            // ========================================
+            // BEFINTLIG ANNONS
+            // ========================================
             await updateAnnons(existing.id, {});
             stats.uppdaterade++;
 
@@ -171,10 +174,30 @@ async function runScraper() {
                 `  💰 PRISÄNDRING: ${annons.marke} ${annons.modell}: ${existing.pris} → ${annons.pris} (${sign}${diff})`
               );
             }
+
+            // Komplettera detaljer om de saknas
+            if (!existing.vaxellada && annons.url) {
+              const detaljer = await hamtaDetaljer(annons.url);
+
+              if (detaljer.vaxellada || detaljer.kaross || detaljer.farg) {
+                await updateAnnons(existing.id, {
+                  vaxellada: detaljer.vaxellada,
+                  kaross: detaljer.kaross,
+                  farg: detaljer.farg,
+                  momsbil: detaljer.momsbil,
+                  pris_exkl_moms: detaljer.pris_exkl_moms,
+                });
+                stats.kompletterade++;
+                const detaljText = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(', ');
+                console.log(`  🔧 KOMPLETTERAD: ${annons.marke} ${annons.modell}: ${detaljText}`);
+              }
+
+              await new Promise((r) => setTimeout(r, 200));
+            }
           }
         }
 
-        // Vänta mellan sökningar för att inte överbelasta
+        // Vänta mellan sökningar
         await new Promise((r) => setTimeout(r, 2000));
       }
     }
@@ -200,6 +223,7 @@ async function runScraper() {
     console.log(`📊 STATISTIK:`);
     console.log(`   • Annonser scannade:  ${stats.hittade}`);
     console.log(`   • NYA annonser:       ${stats.nya} 🆕`);
+    console.log(`   • Kompletterade:      ${stats.kompletterade} 🔧`);
     console.log(`   • Prisändringar:      ${stats.prisandringar} 💰`);
     console.log(`   • Borttagna (sålda?): ${borttagna} 🗑️`);
     console.log("=".repeat(60));
@@ -209,9 +233,11 @@ async function runScraper() {
       console.log("\n🆕 NYA ANNONSER DENNA KÖRNING:");
       console.log("-".repeat(60));
       nyaAnnonserLista.slice(0, 20).forEach((bil, i) => {
+        const momsText = bil.momsbil ? ' 💵' : '';
+        const detaljText = [bil.kaross, bil.farg, bil.vaxellada].filter(Boolean).join(', ');
         console.log(`${i + 1}. ${bil.marke} ${bil.modell} ${bil.arsmodell || ''}`);
-        console.log(`   💰 ${bil.pris?.toLocaleString()} kr | 📍 ${bil.region} | 🔢 ${bil.regnummer || '-'}`);
-        console.log(`   🔗 ${bil.url}`);
+        console.log(`   💰 ${bil.pris?.toLocaleString()} kr${momsText} | 📍 ${bil.region} | 🔢 ${bil.regnummer || '-'}`);
+        console.log(`   📋 ${detaljText || '-'}`);
       });
       if (nyaAnnonserLista.length > 20) {
         console.log(`\n   ... och ${nyaAnnonserLista.length - 20} fler nya annonser`);
