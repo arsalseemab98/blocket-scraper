@@ -422,16 +422,16 @@ export async function hamtaDetaljer(url) {
     }
 
     // 6. Extrahera stad från adress (FALLBACK när API saknar location)
-    // Två mönster:
-    // A) Privat: "query=83171%20Östersund" (postnr + stad)
-    // B) Handlare: "query=Gräddvägen%2019%2C%20906%2020%20Umeå" (gata, postnr, stad)
+    // Mönster för Google Maps-länk med URL-encoded svenska tecken (Ö=%C3%96, Ä=%C3%84, Å=%C3%85)
+    // A) Privat: "query=83135%20%C3%96stersund" (postnr + stad)
+    // B) Handlare: "query=Gräddvägen%2019%2C%20906%2020%20Ume%C3%A5" (gata, postnr, stad)
 
-    // Försök mönster A först (enklare)
-    let mapsMatch = cleanHtml.match(/maps\/search\/\?api=1[^"]*query=(\d{5})%20([^"&%]+)/i);
+    // Försök mönster A först (postnr + stad) - tillåt % för URL-encoded tecken
+    let mapsMatch = cleanHtml.match(/maps\/search\/\?api=1[^"]*query=(\d{5})%20([^"&]+)/i);
 
     // Om inte, försök mönster B (gata, postnr, stad)
     if (!mapsMatch) {
-      // Matcha: ...%20XXXXX%20STAD där XXXXX är postnummer
+      // Matcha: ...%20XXX%20XX%20STAD där XXX XX är postnummer (t.ex. 906%2020)
       mapsMatch = cleanHtml.match(/maps\/search\/\?api=1[^"]*%20(\d{3})%20(\d{2})%20([^"&]+)/i);
       if (mapsMatch) {
         // Grupp 3 är staden
