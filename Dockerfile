@@ -17,6 +17,6 @@ COPY src/ ./src/
 # Miljövariabler (sätts vid deploy)
 ENV NODE_ENV=production
 
-# BACKFILL MODE - Kör en gång för att uppdatera befintliga annonser med detaljer
-# Byt tillbaka till: CMD ["node", "src/index.js", "--cron"] när backfill är klar
-CMD ["node", "src/backfill-details.js"]
+# Kör scraping en gång (för att fylla i publicerad-datum)
+# Byt till --cron för schemalagd körning
+CMD ["node", "src/index.js"]
