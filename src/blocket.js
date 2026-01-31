@@ -318,4 +318,100 @@ export async function hamtaMomsInfo(url) {
     return { momsbil: false, pris_exkl_moms: null };
   }
 }
+
+/**
+ * Hämta ALLA detaljer från enskild annons-sida
+ * Returnerar { vaxellada, kaross, farg, kommun, momsbil, pris_exkl_moms }
+ */
+export async function hamtaDetaljer(url) {
+  const result = {
+    vaxellada: null,
+    kaross: null,
+    farg: null,
+    kommun: null,
+    momsbil: false,
+    pris_exkl_moms: null,
+  };
+
+  try {
+    const response = await fetch(url, { headers: HEADERS });
+
+    if (!response.ok) {
+      return result;
+    }
+
+    const html = await response.text();
+
+    // Försök hitta JSON-data i script-taggar (base64-kodad)
+    const pattern = /<script[^>]*type="application\/json"[^>]*>([^<]+)<\/script>/g;
+    let match;
+
+    while ((match = pattern.exec(html)) !== null) {
+      try {
+        const decoded = Buffer.from(match[1], "base64").toString("utf-8");
+        const data = JSON.parse(decoded);
+
+        // Leta efter ad-data i queries
+        if (data.queries) {
+          for (const query of data.queries) {
+            const adData = query?.state?.data;
+
+            // Kolla om det är en ad med detaljer
+            if (adData && (adData.gearbox || adData.body_type || adData.color || adData.municipality)) {
+              result.vaxellada = adData.gearbox || null;
+              result.kaross = adData.body_type || null;
+              result.farg = adData.color || null;
+              result.kommun = adData.municipality || null;
+            }
+          }
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    // Fallback: Sök efter detaljer i HTML med regex
+    const cleanHtml = html.replace(/&nbsp;/g, ' ');
+
+    // Växellåda
+    if (!result.vaxellada) {
+      const gearMatch = cleanHtml.match(/Växellåda[:\s]*<[^>]*>([^<]+)</i) ||
+                        cleanHtml.match(/"gearbox"[:\s]*"([^"]+)"/i);
+      if (gearMatch) result.vaxellada = gearMatch[1].trim();
+    }
+
+    // Kaross
+    if (!result.kaross) {
+      const bodyMatch = cleanHtml.match(/Karosstyp[:\s]*<[^>]*>([^<]+)</i) ||
+                        cleanHtml.match(/"body_type"[:\s]*"([^"]+)"/i);
+      if (bodyMatch) result.kaross = bodyMatch[1].trim();
+    }
+
+    // Färg
+    if (!result.farg) {
+      const colorMatch = cleanHtml.match(/Färg[:\s]*<[^>]*>([^<]+)</i) ||
+                         cleanHtml.match(/"color"[:\s]*"([^"]+)"/i);
+      if (colorMatch) result.farg = colorMatch[1].trim();
+    }
+
+    // Kommun/Ort
+    if (!result.kommun) {
+      const munMatch = cleanHtml.match(/"municipality"[:\s]*"([^"]+)"/i) ||
+                       cleanHtml.match(/"location_name"[:\s]*"([^"]+)"/i);
+      if (munMatch) result.kommun = munMatch[1].trim();
+    }
+
+    // Moms-info
+    const momsMatch = cleanHtml.match(/\((\d[\d\s]*)\s*kr\s*exkl\.?\s*moms\)/i);
+    if (momsMatch) {
+      result.momsbil = true;
+      result.pris_exkl_moms = parseInt(momsMatch[1].replace(/\s/g, ''));
+    }
+
+    return result;
+  } catch (error) {
+    console.error(`❌ Fel vid hämtning av detaljer: ${error.message}`);
+    return result;
+  }
+}
 // Build trigger: 20260131083616

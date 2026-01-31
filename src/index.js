@@ -13,7 +13,7 @@
  */
 
 import cron from "node-cron";
-import { sokAllaSidor, hamtaMomsInfo, LAN_KODER } from "./blocket.js";
+import { sokAllaSidor, hamtaDetaljer, LAN_KODER } from "./blocket.js";
 import {
   startScraperLog,
   finishScraperLog,
@@ -102,29 +102,40 @@ async function runScraper() {
           const existing = await findAnnons(annons.blocket_id);
 
           if (!existing) {
-            // NY ANNONS
-            let momsInfo = { momsbil: false, pris_exkl_moms: null };
+            // NY ANNONS - hämta ALLA detaljer från annonssidan
+            let detaljer = {
+              vaxellada: null,
+              kaross: null,
+              farg: null,
+              kommun: null,
+              momsbil: false,
+              pris_exkl_moms: null
+            };
 
-            // Om handlare → hämta moms-info från enskild sida
-            if (annons.saljare_typ === "handlare" && annons.url) {
-              console.log(`  🔍 Kollar moms för ${annons.marke} ${annons.modell}...`);
-              momsInfo = await hamtaMomsInfo(annons.url);
+            if (annons.url) {
+              console.log(`  🔍 Hämtar detaljer för ${annons.marke} ${annons.modell}...`);
+              detaljer = await hamtaDetaljer(annons.url);
 
               // Vänta lite för att inte överbelasta
-              await new Promise((r) => setTimeout(r, 500));
+              await new Promise((r) => setTimeout(r, 300));
             }
 
             const created = await createAnnons({
               ...annons,
               region: region,
-              momsbil: momsInfo.momsbil,
-              pris_exkl_moms: momsInfo.pris_exkl_moms,
+              vaxellada: detaljer.vaxellada,
+              kaross: detaljer.kaross,
+              farg: detaljer.farg,
+              kommun: detaljer.kommun,
+              momsbil: detaljer.momsbil,
+              pris_exkl_moms: detaljer.pris_exkl_moms,
             });
 
             if (created) {
               stats.nya++;
-              const momsText = momsInfo.momsbil ? ` 💵 MOMSBIL (${momsInfo.pris_exkl_moms?.toLocaleString()} exkl)` : '';
-              console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr${momsText} (${annons.regnummer || 'inget reg'})`);
+              const momsText = detaljer.momsbil ? ` 💵 MOMS` : '';
+              const detaljText = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(', ');
+              console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr${momsText} | ${detaljText || '-'} | ${detaljer.kommun || region}`);
 
               // Spara för slutrapport
               nyaAnnonserLista.push({
@@ -133,10 +144,14 @@ async function runScraper() {
                 pris: annons.pris,
                 arsmodell: annons.arsmodell,
                 region: region,
+                kommun: detaljer.kommun,
                 regnummer: annons.regnummer,
                 url: annons.url,
-                momsbil: momsInfo.momsbil,
-                pris_exkl_moms: momsInfo.pris_exkl_moms,
+                momsbil: detaljer.momsbil,
+                pris_exkl_moms: detaljer.pris_exkl_moms,
+                vaxellada: detaljer.vaxellada,
+                kaross: detaljer.kaross,
+                farg: detaljer.farg,
               });
             }
           } else {
