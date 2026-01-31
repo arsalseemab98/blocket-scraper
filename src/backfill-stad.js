@@ -41,6 +41,11 @@ async function processAnnons(annons, stats) {
         return { success: false, annons, error: updateError.message };
       }
     } else {
+      // Markera som "OKÄND" så vi inte hämtar den igen
+      await supabase
+        .from("blocket_annonser")
+        .update({ stad: "OKÄND" })
+        .eq("id", annons.id);
       stats.noData++;
       return { success: true, annons, noData: true };
     }
