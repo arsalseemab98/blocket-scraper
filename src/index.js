@@ -30,7 +30,8 @@ import {
   markeraAnnonsSald,
   beraknaMarknadsstatistik,
 } from "./database.js";
-import { fetchBiluppgifterForNewAds, checkBiluppgifterHealth } from "./biluppgifter.js";
+// Biluppgifter hämtas via lokal cron istället (localhost:3456)
+// import { fetchBiluppgifterForNewAds, checkBiluppgifterHealth } from "./biluppgifter.js";
 
 // ============================================
 // KONFIGURATION
@@ -321,20 +322,7 @@ async function runScraper() {
 
     console.log("\n" + "=".repeat(60) + "\n");
 
-    // ============================================
-    // HÄMTA BILUPPGIFTER FÖR NYA ANNONSER
-    // ============================================
-    if (nyaAnnonserLista.length > 0) {
-      const newRegnummers = nyaAnnonserLista
-        .filter(a => a.regnummer)
-        .map(a => a.regnummer);
-
-      if (newRegnummers.length > 0) {
-        console.log(`\n📋 Hämtar biluppgifter för ${newRegnummers.length} nya annonser...`);
-        const buResult = await fetchBiluppgifterForNewAds(newRegnummers);
-        console.log(`   ✅ ${buResult.success} sparade, ⚠️ ${buResult.skipped} utan data, ❌ ${buResult.failed} fel`);
-      }
-    }
+    // Biluppgifter hämtas via lokal cron (localhost:3456) var 30:e min
 
     return { stats, nyaAnnonser: nyaAnnonserLista };
   } catch (error) {
