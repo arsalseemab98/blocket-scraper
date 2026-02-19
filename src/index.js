@@ -29,6 +29,8 @@ import {
   hamtaEjSeddaAnnonser,
   markeraAnnonsSald,
   beraknaMarknadsstatistik,
+  getAllActiveBlocketIds,
+  bulkMarkeraSalda,
 } from "./database.js";
 // Biluppgifter hämtas via lokal cron istället (localhost:3456)
 // import { fetchBiluppgifterForNewAds, checkBiluppgifterHealth } from "./biluppgifter.js";
@@ -229,39 +231,30 @@ async function runScraper() {
     }
 
     // ========================================
-    // KOLLA SÅLDA ANNONSER - besök URL:er
+    // KOLLA SÅLDA ANNONSER - jämför med sökresultat
     // ========================================
     console.log("\n🔍 Kollar om annonser är sålda...");
 
     // Hämta annonser som INTE sågs i sökningen
     const ejSedda = await hamtaEjSeddaAnnonser(seddaIds);
-    console.log(`   ${ejSedda.length} annonser att kontrollera`);
+    console.log(`   ${ejSedda.length} annonser saknas i sökningen`);
 
     let saldaCount = 0;
     const saldaLista = [];
 
-    // Kolla varje annons (max 100 per körning för att inte överbelasta)
-    const attKolla = ejSedda.slice(0, 100);
+    // Markera ALLA saknade som SÅLD direkt (ingen gräns, inga URL-besök)
+    if (ejSedda.length > 0) {
+      const idsToMark = ejSedda.map(a => a.id);
+      saldaCount = await bulkMarkeraSalda(idsToMark);
 
-    for (const annons of attKolla) {
-      const url = annons.url || `https://www.blocket.se/mobility/item/${annons.blocket_id}`;
-      const { borttagen, anledning } = await kollaOmSald(url);
-
-      if (borttagen) {
-        await markeraAnnonsSald(annons.id, anledning);
-        saldaCount++;
-        saldaLista.push({
-          ...annons,
-          anledning,
-        });
-        console.log(`   🏷️  SÅLD: ${annons.marke} ${annons.modell} (${annons.regnummer || '-'}) - ${anledning}`);
+      for (const annons of ejSedda) {
+        saldaLista.push({ ...annons, anledning: "SÅLD" });
       }
 
-      // Vänta lite mellan requests
-      await new Promise((r) => setTimeout(r, 200));
+      console.log(`   ✅ ${saldaCount} annonser markerade som sålda`);
+    } else {
+      console.log(`   ✅ Inga sålda annonser`);
     }
-
-    console.log(`   ✅ ${saldaCount} annonser markerade som sålda`);
 
     // Fallback: Markera gamla som borttagna (ej sedda på 7 dagar)
     const borttagna = await markeraBorttagna(7);
@@ -351,24 +344,31 @@ async function runLightScrape() {
   }
 
   console.log("\n" + "-".repeat(40));
-  console.log("⚡ LIGHT SCRAPE - Söker nya annonser");
+  console.log("⚡ LIGHT SCRAPE - Nya + sålda annonser");
   console.log(`📅 ${now.toLocaleString("sv-SE")}`);
   console.log("-".repeat(40));
 
   let nyaAnnonser = 0;
+  let saldaAnnonser = 0;
   let totaltHittade = 0;
 
   // Starta loggning för light scrape
   const logId = await startScraperLog(REGIONER, [], "light");
 
   try {
+    // Samla alla sedda blocket_id:n från sökningen
+    const seddaIds = new Set();
+
     for (const region of REGIONER) {
-      // Hämta endast sida 1 (nyaste annonser)
-      const annonser = await sokNyaste({ lan: region });
+      // Hämta ALLA sidor (inte bara sida 1)
+      const annonser = await sokAllaSidor({ lan: region });
       totaltHittade += annonser.length;
 
       for (const annons of annonser) {
         if (!annons.blocket_id) continue;
+
+        // Spara som sedd
+        seddaIds.add(annons.blocket_id);
 
         // Kolla om den redan finns
         const existing = await findAnnons(annons.blocket_id);
@@ -410,6 +410,25 @@ async function runLightScrape() {
       await new Promise((r) => setTimeout(r, 500));
     }
 
+    // ========================================
+    // KOLLA SÅLDA — jämför med sökresultat
+    // ========================================
+    const allActive = await getAllActiveBlocketIds();
+    const saknade = allActive.filter(a => !seddaIds.has(a.blocket_id));
+
+    if (saknade.length > 0) {
+      const idsToMark = saknade.map(a => a.id);
+      saldaAnnonser = await bulkMarkeraSalda(idsToMark);
+
+      // Logga de första 10
+      for (const annons of saknade.slice(0, 10)) {
+        console.log(`  🏷️  SÅLD: ${annons.marke} ${annons.modell} (${annons.regnummer || '-'})`);
+      }
+      if (saknade.length > 10) {
+        console.log(`  ... och ${saknade.length - 10} till`);
+      }
+    }
+
     // Avsluta loggning
     if (logId) {
       await finishScraperLog(logId, {
@@ -420,7 +439,7 @@ async function runLightScrape() {
       });
     }
 
-    console.log(`\n⚡ Light scrape klar: ${nyaAnnonser} nya av ${totaltHittade} scannade`);
+    console.log(`\n⚡ Light scrape klar: ${nyaAnnonser} nya, ${saldaAnnonser} sålda av ${totaltHittade} scannade`);
     console.log("-".repeat(40) + "\n");
 
   } catch (error) {

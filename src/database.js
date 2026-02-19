@@ -209,6 +209,50 @@ export async function markeraAnnonsSald(id, anledning = "SÅLD") {
 }
 
 /**
+ * Hämta alla aktiva blocket_id:n (för jämförelse med sökresultat)
+ */
+export async function getAllActiveBlocketIds() {
+  const { data, error } = await supabase
+    .from("blocket_annonser")
+    .select("id, blocket_id, marke, modell, regnummer, region")
+    .is("borttagen", null);
+
+  if (error) {
+    console.error("❌ Kunde inte hämta aktiva annonser:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Bulk-markera annonser som sålda (utan URL-besök)
+ * Markerar alla direkt som SÅLD
+ */
+export async function bulkMarkeraSalda(ids) {
+  if (ids.length === 0) return 0;
+
+  let marked = 0;
+  // Batch i grupper om 50
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    const { error } = await supabase
+      .from("blocket_annonser")
+      .update({
+        borttagen: new Date().toISOString(),
+        borttagen_anledning: "SÅLD",
+      })
+      .in("id", batch);
+
+    if (error) {
+      console.error("❌ Bulk-markera fel:", error.message);
+    } else {
+      marked += batch.length;
+    }
+  }
+  return marked;
+}
+
+/**
  * Spara daglig marknadsstatistik
  */
 export async function sparaMarknadsdata(datum, region, marke, stats) {
