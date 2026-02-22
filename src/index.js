@@ -256,10 +256,10 @@ async function runScraper() {
       console.log(`   ✅ Inga sålda annonser`);
     }
 
-    // Fallback: Markera gamla som borttagna (ej sedda på 7 dagar)
-    const borttagna = await markeraBorttagna(7);
+    // Fallback: Markera gamla som borttagna (ej sedda på 2 dagar)
+    const borttagna = await markeraBorttagna(2);
     if (borttagna > 0) {
-      console.log(`   🗑️  ${borttagna} gamla annonser markerade som borttagna (7+ dagar)`);
+      console.log(`   🗑️  ${borttagna} gamla annonser markerade som borttagna (2+ dagar)`);
     }
 
     // Beräkna daglig statistik
@@ -403,6 +403,9 @@ async function runLightScrape() {
             const stadText = annons.stad ? ` | 📍 ${annons.stad}` : '';
             console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr | ${region}${stadText}`);
           }
+        } else {
+          // BEFINTLIG ANNONS - uppdatera senast_sedd
+          await updateAnnons(existing.id, {});
         }
       }
 
@@ -429,6 +432,40 @@ async function runLightScrape() {
       }
     }
 
+    // ========================================
+    // URL-VERIFIERING — kolla om aktiva annonser faktiskt är borttagna
+    // Blocket kan ha annonser i sökresultat som visar "inte längre tillgänglig"
+    // ========================================
+    let urlVerifierade = 0;
+    let urlBorttagna = 0;
+
+    // Slumpa 10-20 aktiva annonser att verifiera via URL
+    const activeForVerification = allActive
+      .filter(a => seddaIds.has(a.blocket_id)) // Bara de som FINNS i sökningen
+      .sort(() => Math.random() - 0.5)
+      .slice(0, Math.floor(Math.random() * 11) + 10);
+
+    if (activeForVerification.length > 0) {
+      for (const ad of activeForVerification) {
+        const url = `https://www.blocket.se/mobility/item/${ad.blocket_id}`;
+        const status = await kollaOmSald(url);
+        urlVerifierade++;
+
+        if (status.borttagen) {
+          await markeraAnnonsSald(ad.id, status.anledning);
+          urlBorttagna++;
+          console.log(`  🔍 URL-koll: ${ad.marke} ${ad.modell} (${ad.regnummer || '-'}) → ${status.anledning}`);
+        }
+
+        // 500ms mellan URL-besök
+        await new Promise((r) => setTimeout(r, 500));
+      }
+
+      if (urlBorttagna > 0) {
+        console.log(`  🔍 URL-verifiering: ${urlBorttagna} borttagna av ${urlVerifierade} kontrollerade`);
+      }
+    }
+
     // Avsluta loggning
     if (logId) {
       await finishScraperLog(logId, {
@@ -439,7 +476,7 @@ async function runLightScrape() {
       });
     }
 
-    console.log(`\n⚡ Light scrape klar: ${nyaAnnonser} nya, ${saldaAnnonser} sålda av ${totaltHittade} scannade`);
+    console.log(`\n⚡ Light scrape klar: ${nyaAnnonser} nya, ${saldaAnnonser} sålda, ${urlBorttagna} URL-verifierade av ${totaltHittade} scannade`);
     console.log("-".repeat(40) + "\n");
 
   } catch (error) {
