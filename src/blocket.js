@@ -362,7 +362,7 @@ export async function hamtaMomsInfo(url) {
 
 /**
  * Hämta ALLA detaljer från enskild annons-sida
- * Returnerar { vaxellada, kaross, farg, momsbil, pris_exkl_moms }
+ * Returnerar { vaxellada, kaross, farg, momsbil, pris_exkl_moms, ar_handlare, saljare_namn }
  *
  * OBS: stad hämtas nu från sök-API:et (annons.location) istället för från sidan
  */
@@ -455,7 +455,19 @@ export async function hamtaDetaljer(url) {
       result.pris_exkl_moms = parseInt(momsMatch[1].replace(/\s/g, ''));
     }
 
-    // 6. Extrahera stad från adress (FALLBACK när API saknar location)
+    // 6. Kolla om handlare via butikssida-länk
+    if (cleanHtml.includes('Till handlarens butikssida') ||
+        cleanHtml.match(/\/mobility\/dealer\//)) {
+      result.ar_handlare = true;
+
+      // Extrahera handlarnamn från "Säljs av XXX"
+      const dealerNameMatch = cleanHtml.match(/Säljs av\s+([^<]+)/i);
+      if (dealerNameMatch) {
+        result.saljare_namn = dealerNameMatch[1].trim();
+      }
+    }
+
+    // 7. Extrahera stad från adress (FALLBACK när API saknar location)
     // Mönster för Google Maps-länk med URL-encoded svenska tecken (Ö=%C3%96, Ä=%C3%84, Å=%C3%85)
     // A) Privat: "query=83135%20%C3%96stersund" (postnr + stad)
     // B) Handlare: "query=Gräddvägen%2019%2C%20906%2020%20Ume%C3%A5" (gata, postnr, stad)

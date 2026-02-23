@@ -129,9 +129,15 @@ async function runScraper() {
               await new Promise((r) => setTimeout(r, 200));
             }
 
+            // Korrigera saljare_typ om sidan visar handlare
+            const saljarTyp = detaljer.ar_handlare ? "handlare" : annons.saljare_typ;
+            const saljarNamn = detaljer.saljare_namn || annons.saljare_namn;
+
             const created = await createAnnons({
               ...annons,
               region: region,
+              saljare_typ: saljarTyp,
+              saljare_namn: saljarNamn,
               // stad kommer nu från annons.stad (sök-API:et) via spread
               vaxellada: detaljer.vaxellada,
               kaross: detaljer.kaross,
@@ -145,7 +151,8 @@ async function runScraper() {
               const momsText = detaljer.momsbil ? ` 💵 MOMS` : '';
               const detaljText = [detaljer.kaross, detaljer.farg, detaljer.vaxellada].filter(Boolean).join(', ');
               const stadText = annons.stad ? ` 📍 ${annons.stad}` : '';
-              console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr${momsText} | ${detaljText || '-'} | ${region}${stadText}`);
+              const handlareText = detaljer.ar_handlare && !annons.saljare_namn ? ' 🏪 HANDLARE (från sida)' : '';
+              console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr${momsText} | ${detaljText || '-'} | ${region}${stadText}${handlareText}`);
 
               // Spara för slutrapport
               nyaAnnonserLista.push({
@@ -206,6 +213,12 @@ async function runScraper() {
               if (detaljer.farg) updates.farg = detaljer.farg;
               if (detaljer.momsbil) updates.momsbil = detaljer.momsbil;
               if (detaljer.pris_exkl_moms) updates.pris_exkl_moms = detaljer.pris_exkl_moms;
+
+              // Korrigera saljare_typ om sidan visar handlare
+              if (detaljer.ar_handlare && existing.saljare_typ === 'privat') {
+                updates.saljare_typ = 'handlare';
+                if (detaljer.saljare_namn) updates.saljare_namn = detaljer.saljare_namn;
+              }
 
               // Fallback: hämta stad från sidan om API saknar den
               if (!existing.stad && !annons.stad && detaljer.stad) {
@@ -388,9 +401,15 @@ async function runLightScrape() {
             await new Promise((r) => setTimeout(r, 200));
           }
 
+          // Korrigera saljare_typ om sidan visar handlare
+          const saljarTyp = detaljer.ar_handlare ? "handlare" : annons.saljare_typ;
+          const saljarNamn = detaljer.saljare_namn || annons.saljare_namn;
+
           const created = await createAnnons({
             ...annons,
             region: region,
+            saljare_typ: saljarTyp,
+            saljare_namn: saljarNamn,
             vaxellada: detaljer.vaxellada,
             kaross: detaljer.kaross,
             farg: detaljer.farg,
@@ -401,7 +420,8 @@ async function runLightScrape() {
           if (created) {
             nyaAnnonser++;
             const stadText = annons.stad ? ` | 📍 ${annons.stad}` : '';
-            console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr | ${region}${stadText}`);
+            const handlareText = detaljer.ar_handlare && !annons.saljare_namn ? ' 🏪' : '';
+            console.log(`  ✨ NY: ${annons.marke} ${annons.modell} - ${annons.pris?.toLocaleString()} kr | ${region}${stadText}${handlareText}`);
           }
         } else {
           // BEFINTLIG ANNONS - uppdatera senast_sedd
