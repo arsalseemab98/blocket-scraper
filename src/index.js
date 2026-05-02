@@ -521,10 +521,13 @@ async function main() {
     console.log("   📋 FULL SCRAPE: Kl 06:00 och 18:00 varje dag");
     console.log("   ⚡ LIGHT SCRAPE: Var 15:e minut (07:00-22:00)");
     console.log("   📍 Regioner: Norrbotten, Västerbotten, Jämtland, Västernorrland");
-    console.log("   Kör full scrape direkt...\n");
+    console.log("   Kör full scrape direkt + deal hunter parallellt...\n");
 
-    // Kör full scrape direkt vid start
-    await runScraper();
+    // ========================================
+    // DEAL HUNTER - var 30:e sekund, privatannonser i Norrland
+    // Startas FÖRST så att den inte blockas av full scrape
+    // ========================================
+    startDealHunter();
 
     // ========================================
     // LIGHT SCRAPE - var 15:e minut (07:00-22:00)
@@ -549,10 +552,8 @@ async function main() {
       await runScraper();
     });
 
-    // ========================================
-    // DEAL HUNTER - var 30:e sekund, privatannonser i Norrland
-    // ========================================
-    startDealHunter();
+    // Kör full scrape vid start (i bakgrunden, blockar inte deal hunter)
+    runScraper().catch((e) => console.error("⚠️ Initial full scrape fel:", e.message));
 
     // Håll processen igång
     console.log("\n🔄 Bot aktiv - Light scrape var 15:e min, Full scrape 06:00 & 18:00, Deal hunter var 30 sek...");
