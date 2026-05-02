@@ -34,6 +34,7 @@ import {
 } from "./database.js";
 // Biluppgifter hämtas via lokal cron istället (localhost:3456)
 // import { fetchBiluppgifterForNewAds, checkBiluppgifterHealth } from "./biluppgifter.js";
+import { startDealHunter } from "./deal-hunter.js";
 
 // ============================================
 // KONFIGURATION
@@ -548,8 +549,13 @@ async function main() {
       await runScraper();
     });
 
+    // ========================================
+    // DEAL HUNTER - var 30:e sekund, privatannonser i Norrland
+    // ========================================
+    startDealHunter();
+
     // Håll processen igång
-    console.log("\n🔄 Bot aktiv - Light scrape var 15:e min, Full scrape 06:00 & 18:00...");
+    console.log("\n🔄 Bot aktiv - Light scrape var 15:e min, Full scrape 06:00 & 18:00, Deal hunter var 30 sek...");
   } else {
     // Kör en gång
     await runScraper();

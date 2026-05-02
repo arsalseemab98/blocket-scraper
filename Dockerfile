@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Cache bust: 2026-01-31 ADD LIGHT SCRAPE LOGGING
-ARG CACHEBUST=10
+# Cache bust: 2026-05-02 ADD DEAL HUNTER (30s private-seller polling + Gmail SMTP)
+ARG CACHEBUST=11
 
 WORKDIR /app
 
